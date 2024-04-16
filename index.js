@@ -1,14 +1,14 @@
 require("dotenv").config();
 const http = require("http"),
     url = require("url"),
-    moment = require("moment"),
     { v4: uuidv4 } = require("uuid"),
-    evalidator = require("email-validator"),
-    data = [];
+    data = [],
+    {validate, dataHandler} = require('./utils');
 
 let backup;
 
 setInterval(() => (backup = [...data]), 10000);
+
 
 const server = http.createServer((req, res) => {
     function responseEnd(codeArg, jsonArg) {
@@ -42,7 +42,7 @@ const server = http.createServer((req, res) => {
                 responseEnd(200, data);
                 return;
             }
-            let receivedData = getData(query);
+            let receivedData = dataHandler.get(query, data);
             processData(receivedData);
             return;
         } else if (req.method === "DELETE") {
@@ -51,7 +51,7 @@ const server = http.createServer((req, res) => {
                 responseEnd(200, { info: "All data deleted" });
                 return;
             }
-            let deleted = deleteData(query);
+            let deleted = dataHandler.delete(query, data);
             processData(deleted);
             return;
         } else if (req.method === "POST") {
@@ -60,7 +60,7 @@ const server = http.createServer((req, res) => {
             req.on("end", () => {
                 try {
                     let newItem = JSON.parse(body);
-                    if (validateEntry(newItem)) {
+                    if (validate.entry(newItem)) {
                         newItem.id = uuidv4();
                         data.push(newItem);
                         responseEnd(200, newItem);
@@ -81,55 +81,6 @@ server.listen(process.env.PORT, () => {
     console.log(`server on ${process.env.PORT}`);
 });
 
-function validateDate(dateArg, format) {
-    const parsedDate = moment(dateArg, format, true);
-    return parsedDate.isValid();
-}
-
-function validateEmail(arg) {
-    return evalidator.validate(arg);
-}
-
-function validateName(arg) {
-    return typeof arg === "string" && /^[a-zA-Z]+$/.test(arg);
-}
-
-function validateEntry(arg) {
-    const keys = ["date", "name", "surname", "mail"];
-    if (Object.keys(arg).every((el) => keys.includes(el))) {
-        if (
-            validateDate(arg.date, "DD-MM-YYYY") &&
-            validateEmail(arg.mail) &&
-            validateName(arg.name) &&
-            validateName(arg.surname)
-        ) return true;
-    }
-    return false;
-}
-
-function deleteData(arg) {
-    if (arg.id) {
-        let index = data.findIndex((el) => el.id === arg.id);
-        if (index > -1) return data.splice(index, 1);
-    }
-    if (arg.date) {
-        const deleted = [];
-        for (let i = data.length - 1; i >= 0; i--) {
-            if (arg.date === data[i].date) deleted.push(data.splice(i, 1)[0]);
-        }
-        if (deleted.length > 0) return deleted;
-    }
-    return [];
-}
-
-function getData(arg) {
-    if (arg.id) {
-        let index = data.findIndex((el) => el.id === arg.id);
-        if (index > -1) return data[index];
-    }
-    if (arg.date) return data.filter((el) => el.date === arg.date);
-    return [];
-}
 
 // 1. Валидация записи на добавлении (по всем полям). Добавление вынести в
 // отдельную функцию, валидацию закинуть как утилиты
@@ -138,3 +89,5 @@ function getData(arg) {
 
 // 3. Написать логику, которая каждые 5 секунд будет создавать бекап
 // Создан пустой массив, который каждые 5 секунд переписывается под актуаьные данные из data
+
+// Выборка и фильтрация в MondoDB
